@@ -1,0 +1,9 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+inst/doc
+.DS_Store
+.Rbuildignore
+vignettes/hto_counts.csv
+vignettes/ground_truth.csv
