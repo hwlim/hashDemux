@@ -8,9 +8,9 @@ clustering_based_demux(
   seurat_object,
   assay = "HTO",
   expected_doublet_rate = NULL,
-  nCores = NULL,
   knns = seq(5, 30, 5),
-  resolutions = c(1, 2, 3, 4)
+  resolutions = c(1, 2, 3, 4),
+  nCores = NULL
 )
 }
 \arguments{
@@ -20,13 +20,21 @@ clustering_based_demux(
 
 \item{expected_doublet_rate}{proportion of droplets expected to be doublets.
 If value is NULL (default), it will be automatically estimated}
+
+\item{knns}{a vector with different values for k parameter for building kNN graph
+(k.params parameter for Seurat's FindNeighbors function).}
+
+\item{resolutions}{a vector with different values to determine granularity level of clustering
+(resol parameter for Seurat's FindClusters function).}
+
+\item{nCores}{number of cores. If NULL, it will be set to automatically based on available cores.}
 }
 \value{
 A Seurat object (obj) with three columns added to obj@meta.data. \code{sampleBC} column has
  tag assignment for each cell with doublets represented as "tag1_tag2". \code{classification} column has global
  classification information i.e. cells are classified as "Doublet", "Singlet"or "Negative".
- \code{confidence_score}a per-cell value between 0 and 1 with confidence score for the
- demultiplexing result
+ \code{confidence_score} a per-cell value between 0 and 1 with confidence score for the
+ demultiplexing result. \code{confidence_score} is only returned if "length(knns) > 1 or length(resolutions) > 1"
 }
 \description{
 clustering-based sample demux

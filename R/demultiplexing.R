@@ -1,16 +1,21 @@
 #' clustering-based sample demux
 #'
 #'
-#' @param seurat_object Seurat object
-#' @param assay Assay name in seurat_object with hash tag counts matrix (default: HTO)
+#' @param seurat_object Seurat object with tag counts matrix.
+#' @param assay assay name in seurat_object with  tag counts matrix (default: HTO)
 #' @param expected_doublet_rate proportion of droplets expected to be doublets.
-#' If value is NULL (default), it will be automatically estimated
+#' If value is NULL (default), it will be automatically estimated.
+#' @param knns a vector with different values for k parameter for building kNN graph
+#' (k.params parameter for Seurat's FindNeighbors function).
+#' @param resolutions a vector with different values to determine granularity level of clustering
+#' (resol parameter for Seurat's FindClusters function).
+#' @param nCores number of cores. If NULL, it will be set to automatically based on available cores.
 #'
 #' @return A Seurat object (obj) with three columns added to obj@meta.data. \code{sampleBC} column has
 #'  tag assignment for each cell with doublets represented as "tag1_tag2". \code{classification} column has global
 #'  classification information i.e. cells are classified as "Doublet", "Singlet"or "Negative".
-#'  \code{confidence_score}a per-cell value between 0 and 1 with confidence score for the
-#'  demultiplexing result
+#'  \code{confidence_score} a per-cell value between 0 and 1 with confidence score for the
+#'  demultiplexing result. \code{confidence_score} is only returned if "length(knns) > 1 or length(resolutions) > 1"
 #'
 #' @examples
 #' # library(Seurat)
@@ -24,13 +29,16 @@
 #' @importFrom foreach %dopar% %:% foreach
 #' @export
 
-clustering_based_demux = function(seurat_object, assay = "HTO", expected_doublet_rate = NULL,nCores=NULL,
-                                  knns = seq(5,30,5),  resolutions = c(1,2,3,4)){
+clustering_based_demux = function(seurat_object, assay = "HTO", expected_doublet_rate = NULL,
+                                  knns = seq(5,30,5),  resolutions = c(1,2,3,4),nCores=NULL){
   if (is.null(nCores)) {
     doParallel::registerDoParallel(parallel::detectCores() -2)
   }else{
     doParallel::registerDoParallel(nCores)
   }
+
+  k <- resol <- avg_log2FC <- NULL
+
   results = foreach(k = knns) %:%
     foreach(resol = resolutions) %dopar% {
       res <- findMarkerTags(seurat_object, assay = assay,resol = resol,knn = k,logfc.threshold = 0.05)
@@ -57,13 +65,16 @@ clustering_based_demux = function(seurat_object, assay = "HTO", expected_doublet
     label = names(tab)[tab == max(tab)][1]
   })  %>% unlist()
 
-  scores = apply(df, 1, function(x){
-    tab = table(x)
-    score = max(tab)/length(x)
-  })  %>% unlist()
-
   seurat_object$sampleBC = predictions
-  seurat_object$confidence_score = scores
+
+  if(length(knns) > 1 | length(resolutions) > 1){
+    scores = apply(df, 1, function(x){
+      tab = table(x)
+      score = max(tab)/length(x)
+    })  %>% unlist()
+
+    seurat_object$confidence_score = scores
+  }
 
   class= if_else(seurat_object$sampleBC == "Negative" , "Negative",
                  if_else(grepl("_",seurat_object$sampleBC) ,"Doublet" ,"Singlet"))
@@ -75,25 +86,6 @@ clustering_based_demux = function(seurat_object, assay = "HTO", expected_doublet
   return(seurat_object)
 }
 
-
-# find marker tags per cluster
-findMarkerTags2 <- function(seurat_object,assay = "HTO", resol = 1,
-                                   logfc.threshold = 0.1 ,knn = 20 )
-{
-  DefaultAssay(seurat_object) = assay
-  # build nearest-neighbor graph
-  seurat_object <- Seurat::FindNeighbors(seurat_object, features = rownames(seurat_object), dims = NULL,
-                                         assay = assay,k.param = knn )
-  # cluster cells
-  seurat_object <- Seurat::FindClusters(seurat_object,
-                                        graph.name = paste0(assay,"_snn") ,
-                                        resolution = resol )
-  # find cluster markers
-  markers <- Seurat::FindAllMarkers(seurat_object, only.pos = TRUE,pseudocount.use = 0.1, # compatible with Seurat5
-                            assay = assay, verbose = F,
-                            logfc.threshold = logfc.threshold  )
-  return(list(markers, seurat_object$seurat_clusters))
-}
 
 findMarkerTags <- function(seurat_object,assay = "HTO", resol = 1,
                            logfc.threshold = 0.1 ,knn = 20 )
@@ -127,6 +119,9 @@ findMarkerTags <- function(seurat_object,assay = "HTO", resol = 1,
 ##        2. class: classify cells to either Singlet, Doublet or Negative
 label_clusters <- function(seurat_object,markers)
 {
+
+  pct.1 <- p_val_adj <- cluster <- avg_log2FC <- cell_barcode <- gene <- sampleBC <- NULL
+
   # marker expression plots
   if(nrow(markers) == 0){
     df = data.frame(cell_barcode = colnames(seurat_object), sampleBC = "Negative", class = "Negative")
@@ -169,6 +164,8 @@ label_clusters <- function(seurat_object,markers)
 # find logFC value that generate doublet rate close to the expected rate
 find_logfc= function(seurat_object, markers,logfc.thresholds = seq(0.05,0.5,0.05), expected_doublet_rate = NULL){
   results = list()
+  avg_log2FC <- NULL
+
   for(logfc.threshold in logfc.thresholds ) {
     filtered_markers = markers %>% dplyr::filter( avg_log2FC >= logfc.threshold)
     out <- label_clusters(seurat_object, filtered_markers)

@@ -58,6 +58,8 @@
 <span>  <span class="va">seurat_object</span>,</span>
 <span>  assay <span class="op">=</span> <span class="st">"HTO"</span>,</span>
 <span>  expected_doublet_rate <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  knns <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="fl">5</span>, <span class="fl">30</span>, <span class="fl">5</span><span class="op">)</span>,</span>
+<span>  resolutions <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">2</span>, <span class="fl">3</span>, <span class="fl">4</span><span class="op">)</span>,</span>
 <span>  nCores <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -74,7 +76,21 @@
 
 <dt>expected_doublet_rate</dt>
 <dd><p>proportion of droplets expected to be doublets.
-If value is NULL (default), it will be automatically determined.</p></dd>
+If value is NULL (default), it will be automatically estimated</p></dd>
+
+
+<dt>knns</dt>
+<dd><p>a vector with different values for k parameter for building kNN graph
+(k.params parameter for Seurat's FindNeighbors function).</p></dd>
+
+
+<dt>resolutions</dt>
+<dd><p>a vector with different values to determine granularity level of clustering
+(resol parameter for Seurat's FindClusters function).</p></dd>
+
+
+<dt>nCores</dt>
+<dd><p>number of cores. If NULL, it will be set to automatically based on available cores.</p></dd>
 
 </dl></div>
     <div id="value">
@@ -85,8 +101,8 @@ If value is NULL (default), it will be automatically determined.</p></dd>
  tag assignment for each cell with doublets represented as "tag1_tag2". <code>classification</code> column has global
  classification information i.e. cells are classified as "Doublet", "Singlet"or "Negative".</p>
 <p></p>
-<p><code>confidence_score</code>a per-cell value between 0 and 1 with confidence score for the
- demultiplexing result</p>
+<p><code>confidence_score</code> a per-cell value between 0 and 1 with confidence score for the
+ demultiplexing result. <code>confidence_score</code> is only returned if "length(knns) &gt; 1 or length(resolutions) &gt; 1"</p>
     </div>
 
     <div id="ref-examples">

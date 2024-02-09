@@ -41,6 +41,7 @@ knitr::opts_chunk$set(
 
 ```{r, message=FALSE}
 library(Seurat)
+library(ComplexHeatmap)
 library(doParallel)
 library(hashDemux)
 library(dplyr)
@@ -50,20 +51,20 @@ library(dplyr)
 
 ```{r}
 
-download.file("https://raw.githubusercontent.com/Oshlack/hashtag-demux-paper/main/data/BAL_data/batch1_c1_donors.csv", "ground_truth.csv")
+download.file("https://raw.githubusercontent.com/Oshlack/hashtag-demux-paper/main/data/BAL_data/batch3_c1_donors.csv", "ground_truth.csv")
 
-download.file("https://raw.githubusercontent.com/Oshlack/hashtag-demux-paper/main/data/BAL_data/batch1_c1_hto_counts.csv", "hto_counts.csv")
+download.file("https://raw.githubusercontent.com/Oshlack/hashtag-demux-paper/main/data/BAL_data/batch3_c1_hto_counts.csv", "hto_counts.csv")
 
 # tags IDs and their corresponding donor IDs
 # https://github.com/Oshlack/hashtag-demux-paper/blob/main/analysis/BAL_analysis.Rmd
-HTO_donor_list_batch1 <- list("BAL 01" = "BAL A", 
-                              "BAL 02" = "BAL B", 
-                              "BAL 03" = "BAL C", 
-                              "BAL 04" = "BAL D", 
-                              "BAL 05" = "BAL E", 
-                              "BAL 06" = "BAL F", 
-                              "BAL 07" = "BAL G", 
-                              "BAL 08" = "BAL H", 
+HTO_donor_list_batch3 <- list("BAL 17" = "BAL Q", 
+                              "BAL 18" = "BAL R", 
+                              "BAL 19" = "BAL S", 
+                              "BAL 20" = "BAL T", 
+                              "BAL 21" = "BAL U", 
+                              "BAL 22" = "BAL V", 
+                              "BAL 23" = "BAL W", 
+                              "BAL 24" = "BAL X", 
                               "Doublet" = "Doublet", 
                               "Negative" = "Negative")
 
@@ -72,7 +73,7 @@ rownames(ground_truth) = ground_truth$Barcode
 table(ground_truth$genetic_donor)
 
 hto_counts = read.csv("hto_counts.csv", header = T, row.names = 1)
-rownames(hto_counts) = HTO_donor_list_batch1[rownames(hto_counts)]
+rownames(hto_counts) = HTO_donor_list_batch3[rownames(hto_counts)]
 
 ```
 
@@ -84,17 +85,18 @@ seurat_object
 
 seurat_object$ground_truth = ground_truth$genetic_donor
 
-seurat_object <- seurat_object[, sample(colnames(seurat_object), size = ncol(seurat_object), replace=F)]
-
+# downsample dataset
+seurat_object <- seurat_object[, sample(colnames(seurat_object), size = ncol(seurat_object)/10, replace=F)]
 ```
 
 ## generate UMAP plot
 
 ```{r, message=FALSE,  fig.dim = c(15, 8)}
 assay = "HTO"
-seurat_object = seurat_object %>% NormalizeData(assay = assay, normalization.method = "CLR",margin = 2) %>% ScaleData()  
-seurat_object = seurat_object %>% RunPCA(features = rownames(seurat_object@assays[[assay]]),npcs=nrow(seurat_object@assays[[assay]]) - 1)
-seurat_object = seurat_object %>%  RunUMAP(dims = 1:(nrow(seurat_object@assays[[assay]]) - 1), seed.use = 1)
+seurat_object = seurat_object %>% NormalizeData(assay = assay, normalization.method = "CLR",margin = 2) 
+seurat_object = seurat_object %>% ScaleData()  
+seurat_object = seurat_object %>% RunPCA(features = rownames(seurat_object[[assay]]),npcs=nrow(seurat_object[[assay]]) - 1)
+seurat_object = seurat_object %>%  RunUMAP(dims = 1:(nrow(seurat_object[[assay]]) - 1), seed.use = 1)
 
 FeaturePlot(seurat_object, features = rownames(seurat_object), max.cutoff = "q95", min.cutoff = "q5", ncol = 4)
 
@@ -104,36 +106,56 @@ DimPlot(seurat_object, group.by = "ground_truth")
 ## clustering-based demultiplexing
 
 ```{r, message=FALSE, fig.dim = c(10, 7)}
-seurat_object = clustering_based_demux(seurat_object, assay = "HTO",knns = 10, resolutions = 1)
+seurat_object = clustering_based_demux(seurat_object, assay = "HTO")
 
 #table(seurat_object$classification)
-seurat_object$predicted.label = seurat_object$sampleBC
-seurat_object$predicted.label[seurat_object$classification == "Doublet"] = "Doublet"
+seurat_object$clustering_based = seurat_object$sampleBC
+seurat_object$clustering_based[seurat_object$classification == "Doublet"] = "Doublet"
 
 
 DimPlot(seurat_object,group.by = "classification") 
-DimPlot(seurat_object,group.by = "predicted.label", label = T) 
+DimPlot(seurat_object,group.by = "clustering_based", label = T) 
 
-DimPlot(seurat_object,group.by = "predicted.label", label = T) + DimPlot(seurat_object,group.by = "ground_truth", label = T)
+DimPlot(seurat_object,group.by = "clustering_based", label = T) + DimPlot(seurat_object,group.by = "ground_truth", label = T)
 
 ```
 
-### QC plots
-```{r, fig.dim = c(12, 8)}
-# find cell IDs of cells predicted to be comping from donors "BAL E" and "BAL F"
-cells = colnames(seurat_object)[seurat_object$sampleBC == "BAL E_BAL F"]
+## comparison with HTOdemux
+```{r, fig.dim = c(12, 7)}
+seurat_object = seurat_object %>% NormalizeData(assay = assay, normalization.method = "CLR",margin = 1)  
+seurat_object = HTODemux(seurat_object)
+seurat_object$HTOdemux = seurat_object$hash.ID
 
-# plot expression profile of "BAL E" and "BAL F" tags
-FeaturePlot(seurat_object, features = c("BAL E", "BAL F"), max.cutoff = "q95", min.cutoff = "q5", ncol = 3)+  DimPlot(seurat_object,cells.highlight =  cells, label = F)&NoLegend()
+seurat_object$HTOdemux = factor(seurat_object$HTOdemux, levels = sort(levels(seurat_object$HTOdemux)))
+DimPlot(seurat_object, group.by = "HTOdemux") + DimPlot(seurat_object, group.by = "clustering_based")+
+  DimPlot(seurat_object, group.by = "ground_truth")
 
 
-norm_counts = seurat_object@assays$HTO@data %>% as.matrix() %>% t() %>% as.data.frame() 
-topHTO_norm <- apply(norm_counts, 1, function(x) max(x))
-secondHTO_norm <- apply(norm_counts, 1, function(x) max(x[x != max(x)] ))
+col_fun = circlize::colorRamp2(breaks = c(0,0.5 , 1),colors = c("lightgray", "yellow" , "red" ) , reverse = F)
 
-seurat_object$ratio = topHTO_norm / secondHTO_norm
+mtrx = table(seurat_object$ground_truth, seurat_object$clustering_based) %>% as.matrix()
+mtrx2 = apply(mtrx , MARGIN = 1,FUN = function(x) x / sum(x)) %>% t()
 
-FeaturePlot(seurat_object, features = c("confidence_score","ratio","nCount_HTO"), max.cutoff = "q95", min.cutoff = "q5", ncol = 2)
-seurat_object$concordance = seurat_object$predicted.label == seurat_object$ground_truth
-DimPlot(seurat_object, group.by = "concordance")
+cluster_heatmap= Heatmap( mtrx2 , cluster_columns = F, cluster_rows = F,col = col_fun,
+           row_title = "Ground Truth", column_title_side = "bottom",
+           column_title = "Predicted label (Clustering-based)",
+           name = "Proportion of cells",   show_heatmap_legend = F,
+           cell_fun = function(j, i, x, y, width, height, fill) 
+             {grid.text(sprintf("%d", mtrx[i, j]), x, y, gp = gpar(fontsize = 10))},
+           row_names_side = "left", column_names_side = "top" )
+
+mtrx = table(seurat_object$ground_truth, seurat_object$HTOdemux) %>% as.matrix()
+mtrx2 = apply(mtrx , MARGIN = 1,FUN = function(x) x / sum(x)) %>% t()
+
+htodemux_heatmap= Heatmap( mtrx2 , cluster_columns = F, cluster_rows = F,col = col_fun,
+           row_title = "Ground Truth", column_title_side = "bottom",
+           column_title = "Predicted label (HTOdemux)",
+           name = "Proportion of cells2",  show_heatmap_legend = F,
+           cell_fun = function(j, i, x, y, width, height, fill) 
+             {grid.text(sprintf("%d", mtrx[i, j]), x, y, gp = gpar(fontsize = 10))},
+           row_names_side = "left", column_names_side = "top" )
+
+htodemux_heatmap + cluster_heatmap
 ```
+
+
