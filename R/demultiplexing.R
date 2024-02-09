@@ -24,9 +24,8 @@
 #' @importFrom foreach %dopar% %:% foreach
 #' @export
 
-clustering_based_demux = function(seurat_object, assay = "HTO", expected_doublet_rate = NULL,nCores=NULL){
-  knns = seq(5,30,5)
-  resolutions = c(1,2,3,4)
+clustering_based_demux = function(seurat_object, assay = "HTO", expected_doublet_rate = NULL,nCores=NULL,
+                                  knns = seq(5,30,5),  resolutions = c(1,2,3,4)){
   if (is.null(nCores)) {
     doParallel::registerDoParallel(parallel::detectCores() -2)
   }else{
@@ -36,7 +35,10 @@ clustering_based_demux = function(seurat_object, assay = "HTO", expected_doublet
     foreach(resol = resolutions) %dopar% {
       res <- findMarkerTags(seurat_object, assay = assay,resol = resol,knn = k,logfc.threshold = 0.05)
       seurat_object$seurat_clusters = res[[2]]
-      threshold = find_logfc(seurat_object,markers = res[[1]],logfc.thresholds = seq(0.05,0.5,0.05), expected_doublet_rate = expected_doublet_rate )
+
+      # find logFC value that produces the doublet rate close to expected_doublet_rate
+      threshold = find_logfc(seurat_object,markers = res[[1]],logfc.thresholds = seq(0.05,0.5,0.05),
+                             expected_doublet_rate = expected_doublet_rate )
 
       filtered_markers = res[[1]] %>% dplyr::filter( avg_log2FC >= threshold)
       labels = label_clusters(seurat_object, filtered_markers )
@@ -98,7 +100,9 @@ findMarkerTags <- function(seurat_object,assay = "HTO", resol = 1,
 {
   DefaultAssay(seurat_object) = assay
   # build nearest-neighbor graph
-  mtrx = seurat_object[[assay]]$data %>% t()
+  #mtrx = seurat_object[[assay]]$data %>% t()
+  mtrx = GetAssayData(object = seurat_object, assay = assay, slot = "data") %>% t()
+
   #dist_mtrx = dist(mtrx %>% as.matrix() )
   nn = FindNeighbors(object = mtrx, k.param = knn)
   snn = nn$snn

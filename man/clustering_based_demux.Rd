@@ -8,7 +8,9 @@ clustering_based_demux(
   seurat_object,
   assay = "HTO",
   expected_doublet_rate = NULL,
-  nCores = NULL
+  nCores = NULL,
+  knns = seq(5, 30, 5),
+  resolutions = c(1, 2, 3, 4)
 )
 }
 \arguments{
@@ -17,7 +19,7 @@ clustering_based_demux(
 \item{assay}{Assay name in seurat_object with hash tag counts matrix (default: HTO)}
 
 \item{expected_doublet_rate}{proportion of droplets expected to be doublets.
-If value is NULL (default), it will be automatically determined.}
+If value is NULL (default), it will be automatically estimated}
 }
 \value{
 A Seurat object (obj) with three columns added to obj@meta.data. \code{sampleBC} column has

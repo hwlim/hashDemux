@@ -104,7 +104,7 @@ DimPlot(seurat_object, group.by = "ground_truth")
 ## clustering-based demultiplexing
 
 ```{r, message=FALSE, fig.dim = c(10, 7)}
-seurat_object = clustering_based_demux(seurat_object, assay = "HTO")
+seurat_object = clustering_based_demux(seurat_object, assay = "HTO",knns = 10, resolutions = 1)
 
 #table(seurat_object$classification)
 seurat_object$predicted.label = seurat_object$sampleBC
@@ -127,7 +127,7 @@ cells = colnames(seurat_object)[seurat_object$sampleBC == "BAL E_BAL F"]
 FeaturePlot(seurat_object, features = c("BAL E", "BAL F"), max.cutoff = "q95", min.cutoff = "q5", ncol = 3)+  DimPlot(seurat_object,cells.highlight =  cells, label = F)&NoLegend()
 
 
-norm_counts = seurat_object@assays$HTO$data %>% as.matrix() %>% t() %>% as.data.frame() 
+norm_counts = seurat_object@assays$HTO@data %>% as.matrix() %>% t() %>% as.data.frame() 
 topHTO_norm <- apply(norm_counts, 1, function(x) max(x))
 secondHTO_norm <- apply(norm_counts, 1, function(x) max(x[x != max(x)] ))
 
