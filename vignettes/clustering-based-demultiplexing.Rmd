@@ -8,9 +8,7 @@ output:
 date: 'Compiled: `r Sys.Date()`'
 ---
 
-This vignette will provide an brief introduction on how to run a
-newly-developed Seurat-based workflow for de-multiplexing of scRNA-seq
-samples. This workflow takes as input tag counts matrix with tags as
+This vignette provides a brief introduction on how to run the clustering-based demultiplexing workflow for single-cell sample multiplexing experiments. This workflow takes as input tag counts matrix with tags as
 rows and cell IDs as columns and return sample-of-origin for each cell. This workflow is detailed as follows: 
 
 1. Sequencing depth normalization using centered-log ratio (CLR) transformation
@@ -37,7 +35,7 @@ knitr::opts_chunk$set(
 )
 ```
 
-## Load necessary packages
+## Loading necessary packages
 
 ```{r, message=FALSE}
 library(Seurat)
@@ -47,13 +45,15 @@ library(hashDemux)
 library(dplyr)
 ```
 
-## Download and load data
+## downloading sample tag counts data
 
 ```{r}
 
-download.file("https://raw.githubusercontent.com/Oshlack/hashtag-demux-paper/main/data/BAL_data/batch3_c1_donors.csv", "ground_truth.csv")
-
+# downloading tag counts matrix from (Howeitt et. al., 2022)
 download.file("https://raw.githubusercontent.com/Oshlack/hashtag-demux-paper/main/data/BAL_data/batch3_c1_hto_counts.csv", "hto_counts.csv")
+
+# downloading ground truth cell assignments
+download.file("https://raw.githubusercontent.com/Oshlack/hashtag-demux-paper/main/data/BAL_data/batch3_c1_donors.csv", "ground_truth.csv")
 
 # tags IDs and their corresponding donor IDs
 # https://github.com/Oshlack/hashtag-demux-paper/blob/main/analysis/BAL_analysis.Rmd
@@ -77,7 +77,7 @@ rownames(hto_counts) = HTO_donor_list_batch3[rownames(hto_counts)]
 
 ```
 
-## create Seurat object
+## creating Seurat object for downsampled data
 
 ```{r}
 seurat_object = CreateSeuratObject(counts = hto_counts,assay = "HTO", names.delim = "")
@@ -91,30 +91,24 @@ seurat_object <- seurat_object[, sample(colnames(seurat_object), size = ncol(seu
 
 ## generate UMAP plot
 
-```{r, message=FALSE,  fig.dim = c(15, 8)}
+```{r, message=FALSE,  fig.dim = c(9, 6)}
 assay = "HTO"
 seurat_object = seurat_object %>% NormalizeData(assay = assay, normalization.method = "CLR",margin = 2) 
 seurat_object = seurat_object %>% ScaleData()  
 seurat_object = seurat_object %>% RunPCA(features = rownames(seurat_object[[assay]]),npcs=nrow(seurat_object[[assay]]) - 1)
 seurat_object = seurat_object %>%  RunUMAP(dims = 1:(nrow(seurat_object[[assay]]) - 1), seed.use = 1)
 
-FeaturePlot(seurat_object, features = rownames(seurat_object), max.cutoff = "q95", min.cutoff = "q5", ncol = 4)
-
 DimPlot(seurat_object, group.by = "ground_truth")
 ```
 
 ## clustering-based demultiplexing
 
-```{r, message=FALSE, fig.dim = c(10, 7)}
+```{r, message=FALSE, fig.dim = c(12, 7)}
 seurat_object = clustering_based_demux(seurat_object, assay = "HTO")
 
 #table(seurat_object$classification)
 seurat_object$clustering_based = seurat_object$sampleBC
 seurat_object$clustering_based[seurat_object$classification == "Doublet"] = "Doublet"
-
-
-DimPlot(seurat_object,group.by = "classification") 
-DimPlot(seurat_object,group.by = "clustering_based", label = T) 
 
 DimPlot(seurat_object,group.by = "clustering_based", label = T) + DimPlot(seurat_object,group.by = "ground_truth", label = T)
 
@@ -136,7 +130,7 @@ col_fun = circlize::colorRamp2(breaks = c(0,0.5 , 1),colors = c("lightgray", "ye
 mtrx = table(seurat_object$ground_truth, seurat_object$clustering_based) %>% as.matrix()
 mtrx2 = apply(mtrx , MARGIN = 1,FUN = function(x) x / sum(x)) %>% t()
 
-cluster_heatmap= Heatmap( mtrx2 , cluster_columns = F, cluster_rows = F,col = col_fun,
+clustering_heatmap= Heatmap( mtrx2 , cluster_columns = F, cluster_rows = F,col = col_fun,
            row_title = "Ground Truth", column_title_side = "bottom",
            column_title = "Predicted label (Clustering-based)",
            name = "Proportion of cells",   show_heatmap_legend = F,
@@ -155,7 +149,7 @@ htodemux_heatmap= Heatmap( mtrx2 , cluster_columns = F, cluster_rows = F,col = c
              {grid.text(sprintf("%d", mtrx[i, j]), x, y, gp = gpar(fontsize = 10))},
            row_names_side = "left", column_names_side = "top" )
 
-htodemux_heatmap + cluster_heatmap
+htodemux_heatmap + clustering_heatmap
 ```
 
 
