@@ -1,53 +1,41 @@
 ---
-title: "clustering-based sample demultiplexing"
-output:
+title: "clustering-based-demultiplexing"
+output: 
   html_document:
     toc: true
     theme: united
-    df_print: kable
-date: 'Compiled: `r Sys.Date()`'
+# rmarkdown::html_vignette
+
+vignette: >
+  %\VignetteIndexEntry{clustering-based-demultiplexing}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
 
-This vignette provides a brief introduction on how to run the clustering-based demultiplexing workflow for single-cell sample multiplexing experiments. This workflow takes as input tag counts matrix with tags as
-rows and cell IDs as columns and return sample-of-origin for each cell. This workflow is detailed as follows: 
-
-1. Sequencing depth normalization using centered-log ratio (CLR) transformation
-2. uses graph clustering algorithm implemented using Seurat's
-[`FindClusters`](https://satijalab.org/seurat/reference/findclusters)
-function to group cells with similar tags profiles. 
-3. for each cluster marker tags are identified using Seurat's
-[`FindAllMarkers`](https://satijalab.org/seurat/reference/findallmarkers)
-function. 
-4. Cell assignment criteria 
-    - If a cluster have at least two markers, cells belong to this cluster are classified as doublets 
-    - If a cluster has only one marker, cells belong to this cluster are classified
-as singlets. 
-    - If a cluster has no marker, cells belong to this cluster are classified as negatives.
-
-```{r setup, include=FALSE}
+```{r, include = FALSE}
 knitr::opts_chunk$set(
   collapse = TRUE,
-  comment = "#>",
-  tidy = TRUE,
-  tidy.opts = list(width.cutoff = 95),
-  message = FALSE,
-  warning = FALSE
+  comment = "#>"
 )
 ```
 
+This vignette provides a brief introduction on how to run the clustering-based demultiplexing workflow for single-cell sample multiplexing experiments. This workflow takes as input tag counts matrix with tags as rows and cell IDs as columns and returns sample-of-origin for each cell. This workflow starts by clustering cells with similar tags expression profiles. Then, for each cluster marker tags are identified and cells are classified depending on marker tags as follows, - If a cluster have at least two markers, cells belong to this cluster are classified as doublets - If a cluster has only one marker, cells belong to this cluster are classified as singlets. - If a cluster has no marker, cells belong to this cluster are classified as negatives
+
+
 ## Loading necessary packages
 
-```{r, message=FALSE}
+```{r setup, message=FALSE, warning=FALSE}
+library(hashDemux)
 library(Seurat)
 library(ComplexHeatmap)
 library(doParallel)
-library(hashDemux)
 library(dplyr)
 ```
 
+
 ## downloading sample tag counts data
 
-```{r}
+```{r, message=FALSE, warning=FALSE}
 
 # downloading tag counts matrix from (Howeitt et. al., 2022)
 download.file("https://raw.githubusercontent.com/Oshlack/hashtag-demux-paper/main/data/BAL_data/batch3_c1_hto_counts.csv", "hto_counts.csv")
@@ -79,7 +67,7 @@ rownames(hto_counts) = HTO_donor_list_batch3[rownames(hto_counts)]
 
 ## creating Seurat object for downsampled data
 
-```{r}
+```{r, message=FALSE, warning=FALSE}
 seurat_object = CreateSeuratObject(counts = hto_counts,assay = "HTO", names.delim = "")
 seurat_object
 
@@ -91,7 +79,7 @@ seurat_object <- seurat_object[, sample(colnames(seurat_object), size = ncol(seu
 
 ## generate UMAP plot
 
-```{r, message=FALSE,  fig.dim = c(9, 6)}
+```{r, message=FALSE,  fig.dim = c(7, 5), warning=FALSE}
 assay = "HTO"
 seurat_object = seurat_object %>% NormalizeData(assay = assay, normalization.method = "CLR",margin = 2) 
 seurat_object = seurat_object %>% ScaleData()  
@@ -103,7 +91,7 @@ DimPlot(seurat_object, group.by = "ground_truth")
 
 ## clustering-based demultiplexing
 
-```{r, message=FALSE, fig.dim = c(12, 7)}
+```{r, message=FALSE, fig.dim = c(10, 6),warning=FALSE}
 seurat_object = clustering_based_demux(seurat_object, assay = "HTO")
 
 #table(seurat_object$classification)
@@ -115,14 +103,15 @@ DimPlot(seurat_object,group.by = "clustering_based", label = T) + DimPlot(seurat
 ```
 
 ## comparison with HTOdemux
-```{r, fig.dim = c(12, 7)}
+
+```{r, fig.dim = c(10, 7), message=FALSE, warning=FALSE}
 seurat_object = seurat_object %>% NormalizeData(assay = assay, normalization.method = "CLR",margin = 1)  
 seurat_object = HTODemux(seurat_object)
 seurat_object$HTOdemux = seurat_object$hash.ID
 
 seurat_object$HTOdemux = factor(seurat_object$HTOdemux, levels = sort(levels(seurat_object$HTOdemux)))
-DimPlot(seurat_object, group.by = "HTOdemux") + DimPlot(seurat_object, group.by = "clustering_based")+
-  DimPlot(seurat_object, group.by = "ground_truth")
+#DimPlot(seurat_object, group.by = "HTOdemux") + DimPlot(seurat_object, group.by = "clustering_based")+
+#  DimPlot(seurat_object, group.by = "ground_truth")
 
 
 col_fun = circlize::colorRamp2(breaks = c(0,0.5 , 1),colors = c("lightgray", "yellow" , "red" ) , reverse = F)
@@ -152,4 +141,8 @@ htodemux_heatmap= Heatmap( mtrx2 , cluster_columns = F, cluster_rows = F,col = c
 htodemux_heatmap + clustering_heatmap
 ```
 
+## Session Info
 
+```{r}
+sessionInfo()
+```
