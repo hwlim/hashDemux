@@ -6,7 +6,7 @@
 if (!require("devtools", quietly = TRUE))
     install.packages("devtools")
     
-devtools::install_github("hwlim/hashDemux")
+devtools::install_github("hwlim/hashDemux", build_vignettes = TRUE)
 ```
 ## How to use  
 The following vignette provides a brief introduction on how to use the clustering-based demultiplexing workflow
