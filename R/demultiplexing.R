@@ -93,7 +93,7 @@ findMarkerTags <- function(seurat_object,assay = "HTO", resol = 1,
   DefaultAssay(seurat_object) = assay
   # build nearest-neighbor graph
   #mtrx = seurat_object[[assay]]$data %>% t()
-  mtrx = GetAssayData(object = seurat_object, assay = assay, slot = "data") %>% t()
+  mtrx = GetAssayData(object = seurat_object, assay = assay, layer = "data") %>% t()
 
   #dist_mtrx = dist(mtrx %>% as.matrix() )
   nn = FindNeighbors(object = mtrx, k.param = knn)
